@@ -89,7 +89,7 @@ def main():
 
         for idx in range(num_images):
             img = rgb_images[idx]
-            depth = depth_images[idx].squeeze() / 1000.
+            depth = depth_images[idx].squeeze()
 
             detections = detector(img, conf = 0.3, verbose=False)[0]
             bboxes    = []
