@@ -231,7 +231,7 @@ def main():
         depth_path = os.path.join(os.path.dirname(args.video_path), 'depth_pred.npy')
         if os.path.exists(depth_path):
             external_depth = np.load(depth_path)
-            print(f"Loaded predicted depth from {depth_path}")
+            print(f"Loaded predicted depth from {depth_path} (in meters)")
         else:
             print(f"Warning: depth_pred.npy not found at {depth_path}, falling back to MKV depth")
     
@@ -267,7 +267,6 @@ def main():
                 save_mask=args.save_mask,
                 save_2d=args.save_2d
             )
-            
             frame_idx += 1
             pbar.update(1)
             

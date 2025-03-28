@@ -140,7 +140,7 @@ def main():
             camera_translation = cam_t.copy()
 
             # Get hand mask if GSAM2 is enabled
-            hand_mask = np.zeros_like(img)
+            hand_mask = None
             if gsam2 is not None:
                 # Use "hand" as the object to detect
                 masks, scores, _, _, _, _ = gsam2.get_masks_image("hand", img)
@@ -187,6 +187,9 @@ def main():
             demo_verts.append(tmesh.vertices)
 
         demo_verts = np.array(demo_verts)
+        # Delete existing gripper_pos dataset if it exists
+        if 'gripper_pos' in demo:
+            del demo['gripper_pos']
         # Store as gripper_pos in the zarr
         demo.create_dataset('gripper_pos', data=demo_verts)
 

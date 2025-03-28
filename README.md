@@ -68,7 +68,7 @@ conda install pytorch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 pytorch-cuda=
 pip install -r requirements.txt
 ```
 
-Install GSAM2 within the same conda environment as WiLoR.
+Install [GSAM2](https://github.com/jacintosuner/Grounded-SAM-2/) within the same conda environment as WiLoR.
 Additional requirements for GSAM2 and visualizations:
 ```bash
 pip install -r third_party/Grounded-SAM-2/grounding-dino/requirements.txt
