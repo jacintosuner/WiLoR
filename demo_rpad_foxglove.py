@@ -1,6 +1,6 @@
 """
 - Process data in zarr to get hand detection and pose estimation
-- The zarr data is generated after running the code in lfd3d-system on foxglove
+- The zarr data is generated after running the code in lfd3d-system on foxglove (and/or preprocessing it)
 
 NOTE: Some things to keep in mind:
 - Assumes depth and RGB are spatially /and/ temporally aligned
@@ -81,8 +81,8 @@ def main():
         depth_images = np.asarray(demo[DEPTH_KEY]["img"])
         K = np.asarray(demo[CAM_KEY]["k"])[0]
 
-        # Same height and width
-        assert rgb_images.shape[1:3] == depth_images.shape[1:3]
+        # Same number of timestamps, height, width, and number of channels
+        assert rgb_images.shape[:3] == depth_images.shape[:3], f"rgb_images.shape: {rgb_images.shape}, depth_images.shape: {depth_images.shape}"
 
         num_images = min(rgb_images.shape[0], depth_images.shape[0])
         demo_verts = []
