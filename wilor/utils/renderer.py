@@ -1,13 +1,15 @@
 import os
+
 if 'PYOPENGL_PLATFORM' not in os.environ:
     os.environ['PYOPENGL_PLATFORM'] = 'egl'
-import torch
+from typing import List, Optional
+
+import cv2
 import numpy as np
 import pyrender
+import torch
 import trimesh
-import cv2
 from yacs.config import CfgNode
-from typing import List, Optional
 
 DEPTH_FILTER_MM = 1600 # None # TAKES PRIORITY OVER DEPTH_FILTER_PERCENTILE
 DEPTH_FILTER_PERCENTILE = 95
@@ -314,6 +316,25 @@ class Renderer:
         ## depth_render acts as a mask (identifies the 2D projected wilor hand) since points outside the mask have depth=0
         mask = (depths > 0) & (depths_render > 0)
         
+        # import matplotlib.pyplot as plt
+
+        # # Plot both depths_render and depths for comparison
+        # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+        # ax1.imshow(depths_render, cmap='hot', interpolation='nearest')
+        # ax1.set_title('Rendered Depths')
+        # ax1.axis('off')
+
+        # ax2.imshow(depths, cmap='hot', interpolation='nearest')
+        # ax2.set_title('Real Depths')
+        # ax2.axis('off')
+
+        # plt.tight_layout()
+        # plt.show()
+        if not np.any(mask):
+            print("No real depth for the rendered hand")
+            return trimesh.Trimesh()
+        
+        
         # Apply additional hand mask if provided
         if hand_mask is not None:
             # Save original mask for comparison
@@ -355,9 +376,10 @@ class Renderer:
 
         vertex_colors = np.array([(*mesh_base_color, 1.0)] * vertices.shape[0])
         if is_right:
-            mesh = trimesh.Trimesh(vertices_cam, self.faces.copy(), vertex_colors=vertex_colors)
+            # process=False is necessary to avoid trimesh from removing duplicate vertices
+            mesh = trimesh.Trimesh(vertices_cam, self.faces.copy(), vertex_colors=vertex_colors, process=False)
         else:
-            mesh = trimesh.Trimesh(vertices_cam, self.faces_left.copy(), vertex_colors=vertex_colors)
+            mesh = trimesh.Trimesh(vertices_cam, self.faces_left.copy(), vertex_colors=vertex_colors, process=False)
         # mesh = trimesh.Trimesh(vertices.copy(), self.faces.copy())
         
         rot = trimesh.transformations.rotation_matrix(

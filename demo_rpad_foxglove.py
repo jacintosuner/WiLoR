@@ -9,27 +9,26 @@ NOTE: Some things to keep in mind:
 - Definitely needs to be refactored into a more readable and robust script
 """
 
-from pathlib import Path
-import torch
 import argparse
-import os
-import cv2
-import numpy as np
 import json
+import os
+import sys
+from pathlib import Path
 from typing import Dict, Optional
 
-from wilor.models import WiLoR, load_wilor
-from wilor.utils import recursive_to
-from wilor.datasets.vitdet_dataset import ViTDetDataset, DEFAULT_MEAN, DEFAULT_STD
-from wilor.utils.renderer import Renderer, cam_crop_to_full, old_cam_crop_to_full
-from ultralytics import YOLO
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+import open3d as o3d
+import torch
 import zarr
 from tqdm import tqdm
+from ultralytics import YOLO
+from wilor.datasets.vitdet_dataset import DEFAULT_MEAN, DEFAULT_STD, ViTDetDataset
+from wilor.models import WiLoR, load_wilor
+from wilor.utils import recursive_to
+from wilor.utils.renderer import Renderer, cam_crop_to_full, old_cam_crop_to_full
 
-import open3d as o3d
-import matplotlib.pyplot as plt
-
-import sys
 sys.path.append('./third_party/Grounded-SAM-2')
 from gsam_wrapper import GSAM2
 
@@ -72,8 +71,11 @@ def infill_hand_verts(demo_name, seq):
     """
     T = seq.shape[0]
     valid_mask = np.array([np.mean(np.abs(frame)) != 0 for frame in seq])
-
     hole_idxs = np.where(~valid_mask)[0]
+
+    if hole_idxs.size == 0:
+        return seq
+    
     groups = []
     group = [hole_idxs[0]]
     for idx in hole_idxs[1:]:
@@ -132,6 +134,9 @@ def main():
         demo = root[demo_name]
         if "_puppet_right_joint_states" in demo.keys() or "_follower_right_joint_states" in demo.keys():
             continue # robot demo
+        
+        if "gripper_pos" in demo.keys():
+            continue # already processed
 
         if visualize:
             os.makedirs(f"scaled_hand_viz/{demo_name}", exist_ok=True)
