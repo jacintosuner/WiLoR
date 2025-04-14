@@ -319,11 +319,6 @@ class Renderer:
             # Save original mask for comparison
             # mask_before = mask.copy()
             
-            # Ensure hand_mask has same shape as depth mask
-            if hand_mask.shape != mask.shape:
-                print(f"Resizing hand mask to {mask.shape}")
-                hand_mask = cv2.resize(hand_mask.astype(float), (mask.shape[1], mask.shape[0])) > 0.5
-            
             # Convert both masks to boolean numpy arrays
             mask = mask.astype(bool)
             hand_mask = hand_mask.astype(bool)

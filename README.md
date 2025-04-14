@@ -68,7 +68,7 @@ conda install pytorch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 pytorch-cuda=
 pip install -r requirements.txt
 ```
 
-Install GSAM2 within the same conda environment as WiLoR.
+Install [GSAM2](https://github.com/jacintosuner/Grounded-SAM-2/) within the same conda environment as WiLoR.
 Additional requirements for GSAM2 and visualizations:
 ```bash
 pip install -r third_party/Grounded-SAM-2/grounding-dino/requirements.txt
@@ -96,6 +96,7 @@ python demo_rgbdk.py --npy_folder demo_rgbdk --out_folder demo_out --save_mesh -
 Python scripts have been added to the folder [utils](https://github.com/jacintosuner/WiLoR/tree/main/utils) to:
 - capture an rbgdk frame (rgb + depth + camera intrinsics): [capture_rgbdk.py](https://github.com/jacintosuner/WiLoR/blob/main/utils/capture_rgbdk.py)
 - visualize an rgbdk frame together with / or an obj file together with / or a pcd file (npy file with point cloud info): [visualize_rgbdk_or_obj_or_pcd.py ](https://github.com/jacintosuner/WiLoR/blob/main/utils/visualize_rgbdk_or_obj_or_pcd.py)
+- visualize a hand obj file and select the keypoints: [hand_viewer_picker.py](https://github.com/jacintosuner/WiLoR/blob/main/utils/hand_viewer_picker.py)
 
 ## Further comments:
 I'm not sure if the MANO model also considers the size of the hand. That means that if we scale the hand, it might not correspond anymore to a MANO model hand.

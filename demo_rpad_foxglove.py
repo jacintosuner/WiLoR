@@ -1,6 +1,6 @@
 """
 - Process data in zarr to get hand detection and pose estimation
-- The zarr data is generated after running the code in lfd3d-system on foxglove
+- The zarr data is generated after running the code in lfd3d-system on foxglove (and/or preprocessing it)
 
 NOTE: Some things to keep in mind:
 - Assumes depth and RGB are spatially /and/ temporally aligned
@@ -133,15 +133,6 @@ def main():
         if "_puppet_right_joint_states" in demo.keys() or "_follower_right_joint_states" in demo.keys():
             continue # robot demo
 
-        if "_rgb_image_rect" not in demo.keys():
-            continue # old demo, not being used anymore.
-
-
-        if "gripper_pos" in demo.keys():
-            # del demo["gripper_pos"]
-            # Already generated
-            continue
-
         if visualize:
             os.makedirs(f"scaled_hand_viz/{demo_name}", exist_ok=True)
 
@@ -151,8 +142,8 @@ def main():
         depth_ts = np.asarray(demo[DEPTH_KEY]["ts"])
         K = np.asarray(demo[CAM_KEY]["k"])[0]
 
-        # Same height and width
-        assert rgb_images.shape[1:3] == depth_images.shape[1:3]
+        # Same number of timestamps, height, width, and number of channels
+        assert rgb_images.shape[:3] == depth_images.shape[:3], f"rgb_images.shape: {rgb_images.shape}, depth_images.shape: {depth_images.shape}"
 
         rgb_idx, depth_idx, _ = align_timestamps(rgb_ts, depth_ts)
         rgb_images = rgb_images[rgb_idx]
@@ -161,7 +152,7 @@ def main():
 
         for idx in tqdm(range(rgb_images.shape[0])):
             img = rgb_images[idx]
-            depth = depth_images[idx].squeeze() / 1000.
+            depth = depth_images[idx].squeeze()
 
             detections = detector(img, conf = 0.3, verbose=False)[0]
             bboxes    = []
@@ -260,7 +251,9 @@ def main():
 
         demo_verts = np.array(demo_verts)
         demo_verts = infill_hand_verts(demo_name, demo_verts)
-
+        # Delete existing gripper_pos dataset if it exists
+        if 'gripper_pos' in demo:
+            del demo['gripper_pos']
         # Store as gripper_pos in the zarr
         demo.create_dataset('gripper_pos', data=demo_verts)
 
