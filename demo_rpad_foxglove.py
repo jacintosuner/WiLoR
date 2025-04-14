@@ -212,7 +212,7 @@ def main():
             camera_translation = cam_t.copy()
 
             # Get hand mask if GSAM2 is enabled
-            hand_mask = np.zeros((img.shape[0],img.shape[1]))
+            hand_mask = None
             if gsam2 is not None:
                 # Use "hand" as the object to detect
                 masks, scores, _, _, _, _ = gsam2.get_masks_image("hand", img)
