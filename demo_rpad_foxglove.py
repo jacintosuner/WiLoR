@@ -35,6 +35,68 @@ from gsam_wrapper import GSAM2
 
 LIGHT_PURPLE=(0.25098039, 0.274117647, 0.65882353)
 
+def align_timestamps(rgb_ts, other_ts):
+    """
+    Aligns timestamps between two arrays by finding closest matches.
+
+    Args:
+        rgb_ts: Array of RGB timestamps
+        other_ts: Array of other timestamps
+
+    Returns:
+        Tuple of (aligned_rgb_indices, other_indices, time_differences)
+    """
+    aligned_pairs = []
+    rgb_indices = []
+    other_indices = []
+    time_diffs = []
+
+    # For each RGB timestamp, find the closest other timestamp
+    for i, rgb_t in enumerate(rgb_ts):
+        # Calculate absolute differences
+        diffs = np.abs(other_ts - rgb_t)
+        # Find index of minimum difference
+        closest_idx = np.argmin(diffs)
+        # Get the minimum time difference
+        min_diff = diffs[closest_idx]
+
+        rgb_indices.append(i)
+        other_indices.append(closest_idx)
+        time_diffs.append(min_diff)
+
+    return np.array(rgb_indices), np.array(other_indices), np.array(time_diffs)
+
+def infill_hand_verts(demo_name, seq):
+    """
+    Interpolate hole frames in a sequence of point clouds.
+    """
+    T = seq.shape[0]
+    valid_mask = np.array([np.mean(np.abs(frame)) != 0 for frame in seq])
+
+    hole_idxs = np.where(~valid_mask)[0]
+    groups = []
+    group = [hole_idxs[0]]
+    for idx in hole_idxs[1:]:
+        if idx == group[-1] + 1:
+            group.append(idx)
+        else:
+            groups.append(group)
+            group = [idx]
+    groups.append(group)
+
+    for group in groups:
+        start_hole = group[0]
+        end_hole = group[-1]
+        if start_hole - 1 >= 0 and end_hole + 1 < T:
+            if valid_mask[start_hole - 1] and valid_mask[end_hole + 1]:
+                frame_before = seq[start_hole - 1]
+                frame_after  = seq[end_hole + 1]
+                num_steps = len(group) + 1
+                for i, idx in enumerate(range(start_hole, end_hole + 1)):
+                    alpha = (i + 1) / num_steps
+                    seq[idx] = (1 - alpha) * frame_before + alpha * frame_after
+    return seq
+
 def main():
     parser = argparse.ArgumentParser(description='WiLoR demo code')
     parser.add_argument('--input_folder', type=str, required=True)
@@ -71,23 +133,24 @@ def main():
         if "_puppet_right_joint_states" in demo.keys() or "_follower_right_joint_states" in demo.keys():
             continue # robot demo
 
-        if "_rgb_image_rect" not in demo.keys():
-            continue # old demo, not being used anymore.
-
         if visualize:
             os.makedirs(f"scaled_hand_viz/{demo_name}", exist_ok=True)
 
         rgb_images = np.asarray(demo[RGB_KEY]["img"])
+        rgb_ts = np.asarray(demo[RGB_KEY]["ts"])
         depth_images = np.asarray(demo[DEPTH_KEY]["img"])
+        depth_ts = np.asarray(demo[DEPTH_KEY]["ts"])
         K = np.asarray(demo[CAM_KEY]["k"])[0]
 
         # Same number of timestamps, height, width, and number of channels
         assert rgb_images.shape[:3] == depth_images.shape[:3], f"rgb_images.shape: {rgb_images.shape}, depth_images.shape: {depth_images.shape}"
 
-        num_images = min(rgb_images.shape[0], depth_images.shape[0])
+        rgb_idx, depth_idx, _ = align_timestamps(rgb_ts, depth_ts)
+        rgb_images = rgb_images[rgb_idx]
+        depth_images = depth_images[depth_idx]
         demo_verts = []
 
-        for idx in range(num_images):
+        for idx in tqdm(range(rgb_images.shape[0])):
             img = rgb_images[idx]
             depth = depth_images[idx].squeeze()
 
@@ -187,6 +250,7 @@ def main():
             demo_verts.append(tmesh.vertices)
 
         demo_verts = np.array(demo_verts)
+        demo_verts = infill_hand_verts(demo_name, demo_verts)
         # Delete existing gripper_pos dataset if it exists
         if 'gripper_pos' in demo:
             del demo['gripper_pos']
