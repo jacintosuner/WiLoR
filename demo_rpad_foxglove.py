@@ -134,9 +134,6 @@ def main():
         demo = root[demo_name]
         if "_puppet_right_joint_states" in demo.keys() or "_follower_right_joint_states" in demo.keys():
             continue # robot demo
-        
-        if "gripper_pos" in demo.keys():
-            continue # already processed
 
         if visualize:
             os.makedirs(f"scaled_hand_viz/{demo_name}", exist_ok=True)
