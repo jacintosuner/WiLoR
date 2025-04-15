@@ -12,23 +12,23 @@
     python demo_mkv.py --video_path path/to/video.mkv --save_mesh --save_mask --save_2d --no_gsam2 
 """
 
-from pathlib import Path
-import torch
 import argparse
 import os
+import sys
+from pathlib import Path
+
 import cv2
 import numpy as np
-from tqdm import tqdm
-
-from wilor.models import WiLoR, load_wilor
-from wilor.utils import recursive_to
-from wilor.datasets.vitdet_dataset import ViTDetDataset
-from wilor.utils.renderer import Renderer, cam_crop_to_full
-from ultralytics import YOLO
+import torch
 from pyk4a import PyK4APlayback
 from pyk4a.calibration import CalibrationType
+from tqdm import tqdm
+from ultralytics import YOLO
+from wilor.datasets.vitdet_dataset import ViTDetDataset
+from wilor.models import WiLoR, load_wilor
+from wilor.utils import recursive_to
+from wilor.utils.renderer import Renderer, cam_crop_to_full
 
-import sys
 sys.path.append('./third_party/Grounded-SAM-2')
 from gsam_wrapper import GSAM2
 
@@ -92,21 +92,9 @@ def process_frame(frame_rgb, frame_depth, K, model, model_cfg, detector, rendere
             kpts_2d = project_full_img(verts, cam_t, K)
             
             # Get hand mask if GSAM2 is enabled
-            hand_mask = None
+            hand_masks = None
             if gsam2 is not None and save_mask:
-                masks, scores, _, _, _, _ = gsam2.get_masks_image("hand", img_cv2)
-                if masks is not None and len(masks) > 0:
-                    # Take the first mask with highest confidence
-                    hand_mask = masks[0][0].astype(bool)  # Explicitly convert to boolean
-                    
-                    # Save mask visualization if requested
-                    if save_path is not None:
-                        mask_overlay = img_cv2.copy()  # Already in BGR format
-                        mask_overlay[hand_mask] = mask_overlay[hand_mask] * 0.6 + np.array(LIGHT_PURPLE)[::-1] * 255 * 0.4  # Convert LIGHT_PURPLE to BGR
-                        cv2.imwrite(
-                            os.path.join(save_path, 'rendered', f'frame_{frame_idx}_gsam2_mask.jpg'),
-                            mask_overlay
-                        )
+                hand_masks, scores, _, _, _, _ = gsam2.get_masks_image("hand", img_cv2)
             
             # Save 2D keypoints visualization if requested
             if save_path is not None and save_2d:
@@ -133,7 +121,7 @@ def process_frame(frame_rgb, frame_depth, K, model, model_cfg, detector, rendere
                     mesh_base_color=LIGHT_PURPLE,
                     is_right=is_right,
                     K=K,
-                    hand_mask=hand_mask,
+                    hand_masks=hand_masks,
                 )
                 tmesh.export(mesh_path)
             

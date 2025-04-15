@@ -12,22 +12,20 @@
     python demo_rgbdk.py --npy_folder demo_rgbdk --out_folder demo_out --save_mesh --no_gsam2
 """
 
-from pathlib import Path
-import torch
 import argparse
 import os
+import sys
+from pathlib import Path
+
 import cv2
 import numpy as np
-import json
-from typing import Dict, Optional
-
-from wilor.models import WiLoR, load_wilor
-from wilor.utils import recursive_to
-from wilor.datasets.vitdet_dataset import ViTDetDataset, DEFAULT_MEAN, DEFAULT_STD
-from wilor.utils.renderer import Renderer, cam_crop_to_full, old_cam_crop_to_full
+import torch
 from ultralytics import YOLO
+from wilor.datasets.vitdet_dataset import ViTDetDataset
+from wilor.models import load_wilor
+from wilor.utils import recursive_to
+from wilor.utils.renderer import Renderer, cam_crop_to_full
 
-import sys
 sys.path.append('./third_party/Grounded-SAM-2')
 from gsam_wrapper import GSAM2
 
@@ -134,13 +132,11 @@ def main():
                     camera_translation = cam_t.copy()
                     
                     # Get hand mask if GSAM2 is enabled
-                    hand_mask = None
+                    hand_masks = None
                     if gsam2 is not None:
                         # Use "hand" as the object to detect
-                        masks, scores, _, _, _, _ = gsam2.get_masks_image("hand", img_cv2)
-                        if masks is not None and len(masks) > 0:
-                            # Take the first mask with highest confidence
-                            hand_mask = masks[0][0]  # Shape: (H, W)
+                        hand_masks, scores, _, _, _, _ = gsam2.get_masks_image("hand", img_cv2)
+                        
                     
                     tmesh = renderer.vertices_to_trimesh_using_depth(
                         verts, 
@@ -151,7 +147,7 @@ def main():
                         mesh_base_color=LIGHT_PURPLE, 
                         is_right=is_right, 
                         K=K,
-                        hand_mask=hand_mask,
+                        hand_masks=hand_masks,
                     )
                     tmesh.export(os.path.join(args.out_folder, f'{img_fn}_{n}.obj'))
 
@@ -173,14 +169,14 @@ def main():
             cv2.imwrite(os.path.join(args.out_folder, f'{img_fn}.jpg'), 255*input_img_overlay[:, :, ::-1])
         
         # Create mask overlay visualization if GSAM2 was used
-        if gsam2 is not None:
-            if masks is not None and len(masks) > 0:
-                # Create visualization with mask overlay
-                hand_mask = masks[0][0].astype(bool)  # Explicitly convert to boolean
-                mask_overlay = img_cv2.copy()  # Already in BGR format
-                mask_overlay[hand_mask] = mask_overlay[hand_mask] * 0.6 + np.array(LIGHT_PURPLE)[::-1] * 0.4  # Convert LIGHT_PURPLE to BGR
-                # Already in BGR format, save directly
-                cv2.imwrite(os.path.join(args.out_folder, f'{img_fn}_gsam2_mask.jpg'), mask_overlay)
+        # if gsam2 is not None:
+        #     if hand_masks is not None and len(hand_masks) > 0:
+        #         # Create visualization with mask overlay
+        #         hand_mask = hand_masks[0][0].astype(bool)  # Explicitly convert to boolean
+        #         mask_overlay = img_cv2.copy()  # Already in BGR format
+        #         mask_overlay[hand_mask] = mask_overlay[hand_mask] * 0.6 + np.array(LIGHT_PURPLE)[::-1] * 0.4  # Convert LIGHT_PURPLE to BGR
+        #         # Already in BGR format, save directly
+        #         cv2.imwrite(os.path.join(args.out_folder, f'{img_fn}_gsam2_mask.jpg'), mask_overlay)
         
 
 def project_full_img(points, cam_trans, K):

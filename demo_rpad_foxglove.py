@@ -45,7 +45,6 @@ def align_timestamps(rgb_ts, other_ts):
     Returns:
         Tuple of (aligned_rgb_indices, other_indices, time_differences)
     """
-    aligned_pairs = []
     rgb_indices = []
     other_indices = []
     time_diffs = []
@@ -65,7 +64,7 @@ def align_timestamps(rgb_ts, other_ts):
 
     return np.array(rgb_indices), np.array(other_indices), np.array(time_diffs)
 
-def infill_hand_verts(demo_name, seq):
+def infill_hand_verts(seq):
     """
     Interpolate hole frames in a sequence of point clouds.
     """
@@ -205,14 +204,10 @@ def main():
             camera_translation = cam_t.copy()
 
             # Get hand mask if GSAM2 is enabled
-            hand_mask = None
+            hand_masks = None
             if gsam2 is not None:
                 # Use "hand" as the object to detect
-                masks, scores, _, _, _, _ = gsam2.get_masks_image("hand", img)
-                if masks is not None and len(masks) > 0:
-                    # Take the first mask with highest confidence
-                    hand_mask = masks[0][0]  # Shape: (H, W)
-
+                hand_masks, scores, _, _, _, _ = gsam2.get_masks_image("hand", img)
             tmesh = renderer.vertices_to_trimesh_using_depth(
                 verts,
                 camera_translation,
@@ -222,7 +217,7 @@ def main():
                 mesh_base_color=LIGHT_PURPLE,
                 is_right=is_right,
                 K=K,
-                hand_mask=hand_mask,
+                hand_masks=hand_masks,
             )
 
             if tmesh.vertices.shape[0] == 0:
@@ -252,7 +247,7 @@ def main():
             demo_verts.append(tmesh.vertices)
 
         demo_verts = np.array(demo_verts)
-        demo_verts = infill_hand_verts(demo_name, demo_verts)
+        demo_verts = infill_hand_verts(demo_verts)
         # Delete existing gripper_pos dataset if it exists
         if 'gripper_pos' in demo:
             del demo['gripper_pos']

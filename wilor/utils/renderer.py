@@ -304,7 +304,7 @@ class Renderer:
         return mesh
 
 
-    def vertices_to_trimesh_using_depth(self, vertices, camera_translation, depths, focal_length, img_res, mesh_base_color=(1.0, 1.0, 0.9), rot_axis=[1,0,0], rot_angle=0, is_right=1, K=None, hand_mask=None):
+    def vertices_to_trimesh_using_depth(self, vertices, camera_translation, depths, focal_length, img_res, mesh_base_color=(1.0, 1.0, 0.9), rot_axis=[1,0,0], rot_angle=0, is_right=1, K=None, hand_masks=None):
         # material = pyrender.MetallicRoughnessMaterial(
         #     metallicFactor=0.0,
         #     alphaMode='OPAQUE',
@@ -315,47 +315,28 @@ class Renderer:
         
         ## depth_render acts as a mask (identifies the 2D projected wilor hand) since points outside the mask have depth=0
         mask = (depths > 0) & (depths_render > 0)
-        
-        # import matplotlib.pyplot as plt
 
-        # # Plot both depths_render and depths for comparison
-        # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-        # ax1.imshow(depths_render, cmap='hot', interpolation='nearest')
-        # ax1.set_title('Rendered Depths')
-        # ax1.axis('off')
-
-        # ax2.imshow(depths, cmap='hot', interpolation='nearest')
-        # ax2.set_title('Real Depths')
-        # ax2.axis('off')
-
-        # plt.tight_layout()
-        # plt.show()
         if not np.any(mask):
             print("No real depth for the rendered hand")
             return trimesh.Trimesh()
-        
-        
-        # Apply additional hand mask if provided
-        if hand_mask is not None:
-            # Save original mask for comparison
-            # mask_before = mask.copy()
-            
-            # Convert both masks to boolean numpy arrays
+
+        # Apply additional hand mask if provided, selecting the closest hand mask to the projected wilor hand
+        if hand_masks is not None:
             mask = mask.astype(bool)
-            hand_mask = hand_mask.astype(bool)
-            mask &= hand_mask
+            hand_masks = hand_masks.astype(bool)
+            # Calculate centroid of reference mask
+            ref_yx = np.array([coord.mean() for coord in np.nonzero(mask)])
             
-            # # Visualize masks before and after
-            # import matplotlib.pyplot as plt
-            # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-            # ax1.imshow(mask_before)
-            # ax1.set_title('Mask before hand mask')
-            # ax1.axis('off')
-            # ax2.imshow(mask)
-            # ax2.set_title('Mask after hand mask')
-            # ax2.axis('off')
-            # plt.tight_layout()
-            # plt.show()
+            # Calculate centroids for all hand masks
+            mask_centroids = np.array([[coord.mean() for coord in np.nonzero(m[0])] for m in hand_masks])
+            distances = np.linalg.norm(mask_centroids - ref_yx, axis=1)
+            
+            mask &= hand_masks[np.argmin(distances), 0]
+
+        if not np.any(mask):
+            print("No intersection between the rendered hand and the given hand mask")
+            return trimesh.Trimesh()
+
         
         ## Filter out points beyond a certain depth percentile.
         if DEPTH_FILTER_MM is None:
@@ -364,6 +345,11 @@ class Renderer:
             mask &= (depths < depth_filter_percentile)
         else:
             mask &= (depths < DEPTH_FILTER_MM)
+
+
+        if not np.any(mask):
+            print("No intersection between the rendered hand and the depth filter")
+            return trimesh.Trimesh()
         
         ratios = np.zeros_like(depths)
         ratios[mask] = depths[mask] / depths_render[mask]
