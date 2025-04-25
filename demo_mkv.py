@@ -77,7 +77,6 @@ def process_frame(frame_rgb, frame_depth, K, model, model_cfg, detector, rendere
         box_center = batch["box_center"].float()
         box_size = batch["box_size"].float()
         img_size = batch["img_size"].float()
-        scaled_focal_length = K[0, 0]
         pred_cam_t_full = cam_crop_to_full(pred_cam, box_center, box_size, K).detach().cpu().numpy()
         
         batch_size = batch['img'].shape[0]
@@ -116,7 +115,6 @@ def process_frame(frame_rgb, frame_depth, K, model, model_cfg, detector, rendere
                     verts,
                     cam_t,
                     frame_depth,
-                    scaled_focal_length,
                     img_size[n],
                     mesh_base_color=LIGHT_PURPLE,
                     is_right=is_right,

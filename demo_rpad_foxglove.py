@@ -188,7 +188,6 @@ def main():
             box_center    = batch["box_center"].float()
             box_size      = batch["box_size"].float()
             img_size      = batch["img_size"].float()
-            scaled_focal_length = K[0, 0]
             pred_cam_t_full     = cam_crop_to_full(pred_cam, box_center, box_size, K).detach().cpu().numpy()
 
             # Render the result
@@ -212,7 +211,6 @@ def main():
                 verts,
                 camera_translation,
                 depth,
-                scaled_focal_length,
                 img_size[0],
                 mesh_base_color=LIGHT_PURPLE,
                 is_right=is_right,

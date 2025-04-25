@@ -24,7 +24,7 @@ from ultralytics import YOLO
 from wilor.datasets.vitdet_dataset import ViTDetDataset
 from wilor.models import load_wilor
 from wilor.utils import recursive_to
-from wilor.utils.renderer import Renderer, cam_crop_to_full, get_model_K
+from wilor.utils.renderer import Renderer, cam_crop_to_full
 
 sys.path.append('./third_party/Grounded-SAM-2')
 from gsam_wrapper import GSAM2
@@ -69,6 +69,7 @@ def main():
         data = data.item()
         img_cv2 = cv2.cvtColor(data['rgb'], cv2.COLOR_RGB2BGR)  # Convert RGB to BGR to match demo.py's processing
         K = data['K']
+        scaled_focal_length = K[0, 0]
         depths = data['depth']
         detections = detector(img_cv2, conf = 0.3, verbose=False)[0]
         bboxes    = []
@@ -104,9 +105,7 @@ def main():
             box_size      = batch["box_size"].float()
             img_size      = batch["img_size"].float()
 
-            K_model = get_model_K(model_cfg.EXTRA.FOCAL_LENGTH / model_cfg.MODEL.IMAGE_SIZE * img_size.max(), img_size)
-            scaled_focal_length = K_model[0, 0]
-            pred_cam_t_full     = cam_crop_to_full(pred_cam, box_center, box_size, K_model).detach().cpu().numpy()
+            pred_cam_t_full     = cam_crop_to_full(pred_cam, box_center, box_size, K).detach().cpu().numpy()
 
             # Render the result
             batch_size = batch['img'].shape[0]
@@ -143,13 +142,11 @@ def main():
                     tmesh = renderer.vertices_to_trimesh_using_depth(
                         verts, 
                         camera_translation, 
-                        depths, 
-                        scaled_focal_length, 
+                        depths,
                         img_size[n], 
                         mesh_base_color=LIGHT_PURPLE, 
                         is_right=is_right, 
                         K=K,
-                        K_model=K_model,
                         hand_masks=hand_masks,
                     )
                     tmesh.export(os.path.join(args.out_folder, f'{img_fn}_{n}.obj'))
@@ -159,7 +156,7 @@ def main():
             misc_args = dict(
                 mesh_base_color=LIGHT_PURPLE,
                 scene_bg_color=(1, 1, 1),
-                focal_length=scaled_focal_length,
+                K=K,
             )
             cam_view = renderer.render_rgba_multiple(all_verts, cam_t=all_cam_t, render_res=img_size[n], is_right=all_right, **misc_args)
 
