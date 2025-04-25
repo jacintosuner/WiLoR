@@ -1,8 +1,9 @@
 import os
-import numpy as np
+
 import imageio
-from pyk4a import PyK4A, Config, k4a_module
+import numpy as np
 import pyk4a
+from pyk4a import Config, PyK4A, k4a_module
 from pyk4a.calibration import CalibrationType
 
 # Use
@@ -48,9 +49,12 @@ def capture_rgbdk(output_path, to_images, name, device_id=0):
                 
                 # Prepare data dictionary
                 data_dict = {
-                    "rgb": capture.color[:, :, :3][:, :, ::-1],  # Convert BGR to RGB
-                    "depth": capture.transformed_depth,
-                    "K": k4a.calibration.get_camera_matrix(CalibrationType.COLOR)
+                    # "rgb": capture.color[:, :, :3][:, :, ::-1],  # Convert BGR to RGB
+                    "rgb": capture.transformed_color[:, :, :3][:, :, ::-1],
+                    # "depth": capture.transformed_depth,
+                    "depth": capture.depth,
+                    # "K": k4a.calibration.get_camera_matrix(CalibrationType.COLOR)
+                    "K": k4a.calibration.get_camera_matrix(CalibrationType.DEPTH)
                 }
 
                 # Save the dictionary as a .npy file

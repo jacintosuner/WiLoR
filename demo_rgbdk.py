@@ -24,7 +24,7 @@ from ultralytics import YOLO
 from wilor.datasets.vitdet_dataset import ViTDetDataset
 from wilor.models import load_wilor
 from wilor.utils import recursive_to
-from wilor.utils.renderer import Renderer, cam_crop_to_full
+from wilor.utils.renderer import Renderer, cam_crop_to_full, get_model_K
 
 sys.path.append('./third_party/Grounded-SAM-2')
 from gsam_wrapper import GSAM2
@@ -33,9 +33,9 @@ LIGHT_PURPLE=(0.25098039, 0.274117647, 0.65882353)
 
 def main():
     parser = argparse.ArgumentParser(description='WiLoR demo code')
-    parser.add_argument('--npy_folder', type=str, default='npy_files', help='Folder with input npy files')
-    parser.add_argument('--out_folder', type=str, default='out_demo', help='Output folder to save rendered results')
-    parser.add_argument('--save_mesh', dest='save_mesh', action='store_true', default=False, help='If set, save meshes to disk also')
+    parser.add_argument('--npy_folder', type=str, default='demo_rgbdk', help='Folder with input npy files')
+    parser.add_argument('--out_folder', type=str, default='demo_out', help='Output folder to save rendered results')
+    parser.add_argument('--save_mesh', dest='save_mesh', action='store_true', default=True, help='If set, save meshes to disk also')
     parser.add_argument('--rescale_factor', type=float, default=2.0, help='Factor for padding the bbox')
     parser.add_argument('--no_gsam2', action='store_true', help='Disable GSAM2 hand masking')
 
@@ -46,7 +46,6 @@ def main():
     detector = YOLO('./pretrained_models/detector.pt')
     # Setup the renderer
     renderer = Renderer(model_cfg, faces=model.mano.faces)
-    renderer_side = Renderer(model_cfg, faces=model.mano.faces)
     
     device   = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     model    = model.to(device)
@@ -70,6 +69,7 @@ def main():
         data = data.item()
         img_cv2 = cv2.cvtColor(data['rgb'], cv2.COLOR_RGB2BGR)  # Convert RGB to BGR to match demo.py's processing
         K = data['K']
+        depths = data['depth']
         detections = detector(img_cv2, conf = 0.3, verbose=False)[0]
         bboxes    = []
         is_right  = []
@@ -103,9 +103,11 @@ def main():
             box_center    = batch["box_center"].float()
             box_size      = batch["box_size"].float()
             img_size      = batch["img_size"].float()
-            scaled_focal_length = K[0, 0]
-            pred_cam_t_full     = cam_crop_to_full(pred_cam, box_center, box_size, K).detach().cpu().numpy()
-            
+
+            K_model = get_model_K(model_cfg.EXTRA.FOCAL_LENGTH / model_cfg.MODEL.IMAGE_SIZE * img_size.max(), img_size)
+            scaled_focal_length = K_model[0, 0]
+            pred_cam_t_full     = cam_crop_to_full(pred_cam, box_center, box_size, K_model).detach().cpu().numpy()
+
             # Render the result
             batch_size = batch['img'].shape[0]
             for n in range(batch_size):
@@ -141,12 +143,13 @@ def main():
                     tmesh = renderer.vertices_to_trimesh_using_depth(
                         verts, 
                         camera_translation, 
-                        data['depth'], 
+                        depths, 
                         scaled_focal_length, 
                         img_size[n], 
                         mesh_base_color=LIGHT_PURPLE, 
                         is_right=is_right, 
                         K=K,
+                        K_model=K_model,
                         hand_masks=hand_masks,
                     )
                     tmesh.export(os.path.join(args.out_folder, f'{img_fn}_{n}.obj'))

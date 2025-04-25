@@ -14,6 +14,18 @@ from yacs.config import CfgNode
 DEPTH_FILTER_MM = 1600 # None # TAKES PRIORITY OVER DEPTH_FILTER_PERCENTILE
 DEPTH_FILTER_PERCENTILE = 95
 
+def get_model_K(focal_length, img_size):
+    img_w, img_h = img_size[:, 0], img_size[:, 1]
+
+    # Create camera intrinsics matrix as a tensor
+    K = torch.tensor([
+        [focal_length, 0, img_w/2.],
+        [0, focal_length, img_h/2.],
+        [0, 0, 1]
+    ], dtype=torch.float32)
+    
+    return K
+
 def cam_crop_to_full(cam_bbox, box_center, box_size, K):
     # Convert cam_bbox to full image
     cx, cy, b = box_center[:, 0], box_center[:, 1], box_size
@@ -304,14 +316,14 @@ class Renderer:
         return mesh
 
 
-    def vertices_to_trimesh_using_depth(self, vertices, camera_translation, depths, focal_length, img_res, mesh_base_color=(1.0, 1.0, 0.9), rot_axis=[1,0,0], rot_angle=0, is_right=1, K=None, hand_masks=None):
+    def vertices_to_trimesh_using_depth(self, vertices, camera_translation, depths, focal_length, img_res, mesh_base_color=(1.0, 1.0, 0.9), rot_axis=[1,0,0], rot_angle=0, is_right=1, K=None, hand_masks=None, K_model=None):
         # material = pyrender.MetallicRoughnessMaterial(
         #     metallicFactor=0.0,
         #     alphaMode='OPAQUE',
         #     baseColorFactor=(*mesh_base_color, 1.0))
 
         # get mean ratio of depth from visible vertices
-        color, depths_render = self.render_rgba(vertices, camera_translation, rot_axis=rot_axis, rot=rot_angle, mesh_base_color=mesh_base_color, render_res=img_res, focal_length=focal_length, is_right=is_right, return_depth=True)
+        color, depths_render = self.render_rgba(vertices, camera_translation, rot_axis=rot_axis, rot=rot_angle, mesh_base_color=mesh_base_color, render_res=img_res, focal_length=K_model[0,0], is_right=is_right, return_depth=True)
         
         ## depth_render acts as a mask (identifies the 2D projected wilor hand) since points outside the mask have depth=0
         mask = (depths > 0) & (depths_render > 0)
@@ -357,7 +369,7 @@ class Renderer:
 
         vertices_cam = vertices.copy() + camera_translation
         # Modify the depth of vertices_cam using the mean depth ratio
-        vertices_cam_2d = project_full_img(vertices_cam, [0,0,0], K)
+        vertices_cam_2d = project_full_img(vertices_cam, [0,0,0], K_model)
         vertices_cam = full_image_to_3d(vertices_cam_2d, vertices_cam[..., -1:] * mean_depth_ratio, K)
 
         vertex_colors = np.array([(*mesh_base_color, 1.0)] * vertices.shape[0])
