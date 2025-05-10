@@ -15,15 +15,15 @@ Pseudocode: <br>
 1) Identify which of the 3D wilor hand points are visible from the camera point of view.
 2) Average their depth (obtaining avg_3d_wilor_hand)
 3) Identify which of the pixels in the image correspond to these 3D wilor hand points
-    3.1) Project the 3D wilor hand points onto the image
-    3.2) Create a mask from the projection
+    <br>3.1) Project the 3D wilor hand points onto the image
+    <br>3.2) Create a mask from the projection
 4) Average the depth of the pixels from step 3, obtaining avg_3d_real_hand.
-    4.1) Note: we don’t consider the real point clouds that are further away than 1.6m (distance to the end of the experiments table in this case)
+    <br>4.1) Note: we don’t consider the real point clouds that are further away than 1.6m (distance to the end of the experiments table in this case)
 6) Compute the ratio of both averages: depth_ratio = avg_3d_real_hand / avg_3d_wilor_hand.
 7) Scale the 3D wilor hand points using the depth_ratio
-    6.1) Save their depths into an array old_depths
-    6.1) Project the 3D wilor hand points onto the image
-    6.2) Turn those projected points back to 3D considering their new depths = old_depths * depth_ratio, and considering the real camera intrinsics.
+    <br>6.1) Save their depths into an array old_depths
+    <br>6.2) Project the 3D wilor hand points onto the image
+    <br>6.3) Turn those projected points back to 3D considering their new depths = old_depths * depth_ratio, and considering the real camera intrinsics.
 
 
 ### Before:
