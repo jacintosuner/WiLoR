@@ -6,7 +6,8 @@
 
 ## What we do
 Outputs of WiLoR:
-- 3D hand and its 2D projection onto the image. <br>
+- 3D hand and its 2D projection onto the image.
+
 What we infer:
 - we modify (or "scale") the coordinates of the 3D hand so they align (in 3D) with the real 3D hand. We leverage their alignment in the image. <br>
 
