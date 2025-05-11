@@ -11,8 +11,9 @@ import torch
 import trimesh
 from yacs.config import CfgNode
 
-DEPTH_FILTER_MM = 1600 # None # TAKES PRIORITY OVER DEPTH_FILTER_PERCENTILE
+DEPTH_FILTER_MM = 1600  # None # TAKES PRIORITY OVER DEPTH_FILTER_PERCENTILE
 DEPTH_FILTER_PERCENTILE = 95
+
 
 def get_model_K(focal_length, img_size):
     img_w, img_h = img_size[:, 0], img_size[:, 1]
@@ -23,8 +24,9 @@ def get_model_K(focal_length, img_size):
         [0, focal_length, img_h/2.],
         [0, 0, 1]
     ], dtype=torch.float32)
-    
+
     return K
+
 
 def cam_crop_to_full(cam_bbox, box_center, box_size, K):
     # Convert cam_bbox to full image
@@ -35,6 +37,7 @@ def cam_crop_to_full(cam_bbox, box_center, box_size, K):
     ty = (2 * (cy - K[1, 2]) / bs) + cam_bbox[:, 2]
     full_cam = torch.stack([tx, ty, tz], dim=-1)
     return full_cam
+
 
 def old_cam_crop_to_full(cam_bbox, box_center, box_size, img_size, focal_length=5000.):
     # Convert cam_bbox to full image
@@ -48,6 +51,7 @@ def old_cam_crop_to_full(cam_bbox, box_center, box_size, img_size, focal_length=
     full_cam = torch.stack([tx, ty, tz], dim=-1)
     return full_cam
 
+
 def get_light_poses(n_lights=5, elevation=np.pi / 3, dist=12):
     # get lights in a circle around origin at elevation
     thetas = elevation * np.ones(n_lights)
@@ -59,8 +63,10 @@ def get_light_poses(n_lights=5, elevation=np.pi / 3, dist=12):
         poses.append((rot @ trans).numpy())
     return poses
 
+
 def make_translation(t):
     return make_4x4_pose(torch.eye(3), t)
+
 
 def make_rotation(rx=0, ry=0, rz=0, order="xyz"):
     Rx = rotx(rx)
@@ -79,6 +85,7 @@ def make_rotation(rx=0, ry=0, rz=0, order="xyz"):
     elif order == "zxy":
         R = Ry @ Rx @ Rz
     return make_4x4_pose(R, torch.zeros(3))
+
 
 def make_4x4_pose(R, t):
     """
@@ -127,7 +134,7 @@ def rotz(theta):
         ],
         dtype=torch.float32,
     )
-    
+
 
 def create_raymond_lights() -> List[pyrender.Node]:
     """
@@ -152,7 +159,7 @@ def create_raymond_lights() -> List[pyrender.Node]:
         y = np.cross(z, x)
 
         matrix = np.eye(4)
-        matrix[:3,:3] = np.c_[x,y,z]
+        matrix[:3, :3] = np.c_[x, y, z]
         nodes.append(pyrender.Node(
             light=pyrender.DirectionalLight(color=np.ones(3), intensity=1.0),
             matrix=matrix
@@ -161,10 +168,10 @@ def create_raymond_lights() -> List[pyrender.Node]:
     return nodes
 
 
-def project_full_img(points, cam_trans, K): 
+def project_full_img(points, cam_trans, K):
     points = points + cam_trans
     points = points / points[..., -1:]
-    V_2d = (K @ points.T).T 
+    V_2d = (K @ points.T).T
     return V_2d[..., :-1]
 
 
@@ -208,22 +215,22 @@ class Renderer:
                               [120, 108, 78],
                               [78, 108, 79]])
         faces = np.concatenate([faces, faces_new], axis=0)
-        
+
         self.camera_center = [self.img_res // 2, self.img_res // 2]
         self.faces = faces
-        self.faces_left = self.faces[:,[0,2,1]]
+        self.faces_left = self.faces[:, [0, 2, 1]]
 
     def __call__(self,
-                vertices: np.array,
-                camera_translation: np.array,
-                image: torch.Tensor,
-                full_frame: bool = False,
-                imgname: Optional[str] = None,
-                side_view=False, rot_angle=90,
-                mesh_base_color=(1.0, 1.0, 0.9),
-                scene_bg_color=(0,0,0),
-                return_rgba=False,
-                ) -> np.array:
+                 vertices: np.array,
+                 camera_translation: np.array,
+                 image: torch.Tensor,
+                 full_frame: bool = False,
+                 imgname: Optional[str] = None,
+                 side_view=False, rot_angle=90,
+                 mesh_base_color=(1.0, 1.0, 0.9),
+                 scene_bg_color=(0, 0, 0),
+                 return_rgba=False,
+                 ) -> np.array:
         """
         Render meshes on input image
         Args:
@@ -233,12 +240,15 @@ class Renderer:
             full_frame (bool): If True, then render on the full image.
             imgname (Optional[str]): Contains the original image filenamee. Used only if full_frame == True.
         """
-        
+
         if full_frame:
             image = cv2.imread(imgname).astype(np.float32)[:, :, ::-1] / 255.
         else:
-            image = image.clone() * torch.tensor(self.cfg.MODEL.IMAGE_STD, device=image.device).reshape(3,1,1)
-            image = image + torch.tensor(self.cfg.MODEL.IMAGE_MEAN, device=image.device).reshape(3,1,1)
+            image = image.clone() * torch.tensor(self.cfg.MODEL.IMAGE_STD,
+                                                 device=image.device).reshape(3, 1, 1)
+            image = image + \
+                torch.tensor(self.cfg.MODEL.IMAGE_MEAN,
+                             device=image.device).reshape(3, 1, 1)
             image = image.permute(1, 2, 0).cpu().numpy()
 
         renderer = pyrender.OffscreenRenderer(viewport_width=image.shape[1],
@@ -272,12 +282,12 @@ class Renderer:
                                            cx=camera_center[0], cy=camera_center[1], zfar=1e12)
         scene.add(camera, pose=camera_pose)
 
-
         light_nodes = create_raymond_lights()
         for node in light_nodes:
             scene.add_node(node)
 
-        color, rend_depth = renderer.render(scene, flags=pyrender.RenderFlags.RGBA)
+        color, rend_depth = renderer.render(
+            scene, flags=pyrender.RenderFlags.RGBA)
         color = color.astype(np.float32) / 255.0
         renderer.delete()
 
@@ -286,28 +296,31 @@ class Renderer:
 
         valid_mask = (color[:, :, -1])[:, :, np.newaxis]
         if not side_view:
-            output_img = (color[:, :, :3] * valid_mask + (1 - valid_mask) * image)
+            output_img = (color[:, :, :3] * valid_mask +
+                          (1 - valid_mask) * image)
         else:
             output_img = color[:, :, :3]
 
         output_img = output_img.astype(np.float32)
         return output_img
 
-    def vertices_to_trimesh(self, vertices, camera_translation, mesh_base_color=(1.0, 1.0, 0.9), 
-                            rot_axis=[1,0,0], rot_angle=0, is_right=1):
+    def vertices_to_trimesh(self, vertices, camera_translation, mesh_base_color=(1.0, 1.0, 0.9),
+                            rot_axis=[1, 0, 0], rot_angle=0, is_right=1):
         # material = pyrender.MetallicRoughnessMaterial(
         #     metallicFactor=0.0,
         #     alphaMode='OPAQUE',
         #     baseColorFactor=(*mesh_base_color, 1.0))
         vertex_colors = np.array([(*mesh_base_color, 1.0)] * vertices.shape[0])
         if is_right:
-            mesh = trimesh.Trimesh(vertices.copy() + camera_translation, self.faces.copy(), vertex_colors=vertex_colors)
+            mesh = trimesh.Trimesh(vertices.copy(
+            ) + camera_translation, self.faces.copy(), vertex_colors=vertex_colors)
         else:
-            mesh = trimesh.Trimesh(vertices.copy() + camera_translation, self.faces_left.copy(), vertex_colors=vertex_colors)
+            mesh = trimesh.Trimesh(vertices.copy(
+            ) + camera_translation, self.faces_left.copy(), vertex_colors=vertex_colors)
         # mesh = trimesh.Trimesh(vertices.copy(), self.faces.copy())
-        
+
         rot = trimesh.transformations.rotation_matrix(
-                np.radians(rot_angle), rot_axis)
+            np.radians(rot_angle), rot_axis)
         mesh.apply_transform(rot)
 
         rot = trimesh.transformations.rotation_matrix(
@@ -315,17 +328,17 @@ class Renderer:
         mesh.apply_transform(rot)
         return mesh
 
-
-    def vertices_to_trimesh_using_depth(self, vertices, camera_translation, depths, focal_length, img_res, mesh_base_color=(1.0, 1.0, 0.9), rot_axis=[1,0,0], rot_angle=0, is_right=1, K=None, hand_masks=None, K_model=None):
+    def vertices_to_trimesh_using_depth(self, vertices, camera_translation, depths, focal_length, img_res, mesh_base_color=(1.0, 1.0, 0.9), rot_axis=[1, 0, 0], rot_angle=0, is_right=1, K=None, hand_masks=None, K_model=None):
         # material = pyrender.MetallicRoughnessMaterial(
         #     metallicFactor=0.0,
         #     alphaMode='OPAQUE',
         #     baseColorFactor=(*mesh_base_color, 1.0))
 
-        # get mean ratio of depth from visible vertices
-        color, depths_render = self.render_rgba(vertices, camera_translation, rot_axis=rot_axis, rot=rot_angle, mesh_base_color=mesh_base_color, render_res=img_res, focal_length=K_model[0,0], is_right=is_right, return_depth=True)
-        
-        ## depth_render acts as a mask (identifies the 2D projected wilor hand) since points outside the mask have depth=0
+        # get wilor hand depths
+        color, depths_render = self.render_rgba(vertices, camera_translation, rot_axis=rot_axis, rot=rot_angle,
+                                                mesh_base_color=mesh_base_color, render_res=img_res, focal_length=K_model[0, 0], is_right=is_right, return_depth=True)
+
+        # depth_render acts as a mask (identifies the 2D projected wilor hand) since points outside the mask have depth=0
         mask = (depths > 0) & (depths_render > 0)
 
         if not np.any(mask):
@@ -338,71 +351,77 @@ class Renderer:
             hand_masks = hand_masks.astype(bool)
             # Calculate centroid of reference mask
             ref_yx = np.array([coord.mean() for coord in np.nonzero(mask)])
-            
+
             # Calculate centroids for all hand masks
-            mask_centroids = np.array([[coord.mean() for coord in np.nonzero(m[0])] for m in hand_masks])
+            mask_centroids = np.array(
+                [[coord.mean() for coord in np.nonzero(m[0])] for m in hand_masks])
             distances = np.linalg.norm(mask_centroids - ref_yx, axis=1)
-            
+
             mask &= hand_masks[np.argmin(distances), 0]
 
         if not np.any(mask):
             print("No intersection between the rendered hand and the given hand mask")
             return trimesh.Trimesh()
 
-        
-        ## Filter out points beyond a certain depth percentile.
+        # Filter out points beyond a certain depth percentile.
         if DEPTH_FILTER_MM is None:
-            depth_filter_percentile = np.percentile(depths[mask], DEPTH_FILTER_PERCENTILE)  # It's the percentile of the depth of the real points that match with the wilor hand
+            # It's the percentile of the depth of the real points that match with the wilor hand
+            depth_filter_percentile = np.percentile(
+                depths[mask], DEPTH_FILTER_PERCENTILE)
             print(f"Depth filter percentile: {depth_filter_percentile}")
             mask &= (depths < depth_filter_percentile)
         else:
             mask &= (depths < DEPTH_FILTER_MM)
 
-
         if not np.any(mask):
             print("No intersection between the rendered hand and the depth filter")
             return trimesh.Trimesh()
-        
+
+        # Get the mean ratio of depth from visible vertices, which will be used to scale the wilor hand
         ratios = np.zeros_like(depths)
         ratios[mask] = depths[mask] / depths_render[mask]
         mean_depth_ratio = np.mean(ratios[mask])
 
         vertices_cam = vertices.copy() + camera_translation
-        # Modify the depth of vertices_cam using the mean depth ratio
-        vertices_cam_2d = project_full_img(vertices_cam, [0,0,0], K_model)
-        vertices_cam = full_image_to_3d(vertices_cam_2d, vertices_cam[..., -1:] * mean_depth_ratio, K)
+
+        # Modify the depth of vertices_cam using the mean ratio of depth
+        vertices_cam_2d = project_full_img(vertices_cam, [0, 0, 0], K_model)
+        vertices_cam = full_image_to_3d(
+            vertices_cam_2d, vertices_cam[..., -1:] * mean_depth_ratio, K)
 
         vertex_colors = np.array([(*mesh_base_color, 1.0)] * vertices.shape[0])
+        # transform depending on handedness
         if is_right:
             # process=False is necessary to avoid trimesh from removing duplicate vertices
-            mesh = trimesh.Trimesh(vertices_cam, self.faces.copy(), vertex_colors=vertex_colors, process=False)
+            mesh = trimesh.Trimesh(vertices_cam, self.faces.copy(
+            ), vertex_colors=vertex_colors, process=False)
         else:
-            mesh = trimesh.Trimesh(vertices_cam, self.faces_left.copy(), vertex_colors=vertex_colors, process=False)
+            mesh = trimesh.Trimesh(vertices_cam, self.faces_left.copy(
+            ), vertex_colors=vertex_colors, process=False)
         # mesh = trimesh.Trimesh(vertices.copy(), self.faces.copy())
-        
+
         rot = trimesh.transformations.rotation_matrix(
-                np.radians(rot_angle), rot_axis)
+            np.radians(rot_angle), rot_axis)
         mesh.apply_transform(rot)
         return mesh
-    
 
     def render_rgba(
-            self,
-            vertices: np.array,
-            cam_t = None,
-            rot=None,
-            rot_axis=[1,0,0],
-            rot_angle=0,
-            camera_z=3,
-            # camera_translation: np.array,
-            mesh_base_color=(1.0, 1.0, 0.9),
-            scene_bg_color=(0,0,0),
-            render_res=[256, 256],
-            focal_length=None,
-            is_right=None,
-            return_depth=True,
-            K=None,
-        ):
+        self,
+        vertices: np.array,
+        cam_t=None,
+        rot=None,
+        rot_axis=[1, 0, 0],
+        rot_angle=0,
+        camera_z=3,
+        # camera_translation: np.array,
+        mesh_base_color=(1.0, 1.0, 0.9),
+        scene_bg_color=(0, 0, 0),
+        render_res=[256, 256],
+        focal_length=None,
+        is_right=None,
+        return_depth=True,
+        K=None,
+    ):
 
         renderer = pyrender.OffscreenRenderer(viewport_width=render_res[0],
                                               viewport_height=render_res[1],
@@ -420,9 +439,11 @@ class Renderer:
             camera_translation = cam_t.copy()
             camera_translation[0] *= -1.
         else:
-            camera_translation = np.array([0, 0, camera_z * focal_length/render_res[1]])
+            camera_translation = np.array(
+                [0, 0, camera_z * focal_length/render_res[1]])
 
-        mesh = self.vertices_to_trimesh(vertices, np.array([0, 0, 0]), mesh_base_color, rot_axis, rot_angle, is_right=is_right)
+        mesh = self.vertices_to_trimesh(vertices, np.array(
+            [0, 0, 0]), mesh_base_color, rot_axis, rot_angle, is_right=is_right)
         mesh = pyrender.Mesh.from_trimesh(mesh)
         # mesh = pyrender.Mesh.from_trimesh(mesh, material=material)
 
@@ -433,12 +454,12 @@ class Renderer:
         camera_pose = np.eye(4)
         camera_pose[:3, 3] = camera_translation
         if K is not None:
-            camera = pyrender.IntrinsicsCamera(fx=K[0,0], fy=K[1,1],
+            camera = pyrender.IntrinsicsCamera(fx=K[0, 0], fy=K[1, 1],
                                                cx=K[0, 2], cy=K[1, 2], zfar=1e12)
         else:
             camera_center = [render_res[0] / 2., render_res[1] / 2.]
             camera = pyrender.IntrinsicsCamera(fx=focal_length, fy=focal_length,
-                                           cx=camera_center[0], cy=camera_center[1], zfar=1e12)
+                                               cx=camera_center[0], cy=camera_center[1], zfar=1e12)
 
         # Create camera node and add it to pyRender scene
         camera_node = pyrender.Node(camera=camera, matrix=camera_pose)
@@ -450,7 +471,8 @@ class Renderer:
         for node in light_nodes:
             scene.add_node(node)
 
-        color, rend_depth = renderer.render(scene, flags=pyrender.RenderFlags.RGBA)
+        color, rend_depth = renderer.render(
+            scene, flags=pyrender.RenderFlags.RGBA)
         color = color.astype(np.float32) / 255.0
         renderer.delete()
 
@@ -460,17 +482,17 @@ class Renderer:
         return color
 
     def render_rgba_multiple(
-            self,
-            vertices: List[np.array],
-            cam_t: List[np.array],
-            rot_axis=[1,0,0],
-            rot_angle=0,
-            mesh_base_color=(1.0, 1.0, 0.9),
-            scene_bg_color=(0,0,0),
-            render_res=[256, 256],
-            focal_length=None,
-            is_right=None,
-        ):
+        self,
+        vertices: List[np.array],
+        cam_t: List[np.array],
+        rot_axis=[1, 0, 0],
+        rot_angle=0,
+        mesh_base_color=(1.0, 1.0, 0.9),
+        scene_bg_color=(0, 0, 0),
+        render_res=[256, 256],
+        focal_length=None,
+        is_right=None,
+    ):
 
         renderer = pyrender.OffscreenRenderer(viewport_width=render_res[0],
                                               viewport_height=render_res[1],
@@ -483,11 +505,12 @@ class Renderer:
         if is_right is None:
             is_right = [1 for _ in range(len(vertices))]
 
-        mesh_list = [pyrender.Mesh.from_trimesh(self.vertices_to_trimesh(vvv, ttt.copy(), mesh_base_color, rot_axis, rot_angle, is_right=sss)) for vvv,ttt,sss in zip(vertices, cam_t, is_right)]
+        mesh_list = [pyrender.Mesh.from_trimesh(self.vertices_to_trimesh(vvv, ttt.copy(
+        ), mesh_base_color, rot_axis, rot_angle, is_right=sss)) for vvv, ttt, sss in zip(vertices, cam_t, is_right)]
 
         scene = pyrender.Scene(bg_color=[*scene_bg_color, 0.0],
                                ambient_light=(0.3, 0.3, 0.3))
-        for i,mesh in enumerate(mesh_list):
+        for i, mesh in enumerate(mesh_list):
             scene.add(mesh, f'mesh_{i}')
 
         camera_pose = np.eye(4)
@@ -507,7 +530,8 @@ class Renderer:
         for node in light_nodes:
             scene.add_node(node)
 
-        color, rend_depth = renderer.render(scene, flags=pyrender.RenderFlags.RGBA)
+        color, rend_depth = renderer.render(
+            scene, flags=pyrender.RenderFlags.RGBA)
         color = color.astype(np.float32) / 255.0
         renderer.delete()
 
@@ -522,7 +546,8 @@ class Renderer:
             matrix = cam_pose @ pose
             node = pyrender.Node(
                 name=f"light-{i:02d}",
-                light=pyrender.DirectionalLight(color=color, intensity=intensity),
+                light=pyrender.DirectionalLight(
+                    color=color, intensity=intensity),
                 matrix=matrix,
             )
             if scene.has_node(node):

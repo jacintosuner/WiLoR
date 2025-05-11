@@ -4,26 +4,64 @@
 
 </div>
 
-## What we do
-Outputs of WiLoR:
-- 3D hand and its 2D projection onto the image.
+## Preamble
+This work is motivated by a limitation of WiLoR: its predicted MANO hand model is not aligned with the actual hand in the real data in 3D space as it does not make use of real depth information (see "Before" section below). Nonetheless, WiLoR provides a close alignment between the 2D projection of its predicted 3D hand and the real hand in the image (see "2D Projection for Reference" section below). In this work, we leverage this 2D alignment together with real depth information to rescale the predicted MANO hand and achieve accurate 3D alignment.
 
-What we infer:
-- we modify (or "scale") the coordinates of the 3D hand so they align (in 3D) with the real 3D hand. We leverage their alignment in the image. <br>
+## Method
 
-Pseudocode: <br>
-1) Identify which of the 3D wilor hand points are visible from the camera point of view.
-2) Average their depth (obtaining avg_3d_wilor_hand)
-3) Identify which of the pixels in the image correspond to these 3D wilor hand points
-    <br>3.1) Project the 3D wilor hand points onto the image
-    <br>3.2) Create a mask from the projection
-4) Average the depth of the pixels from step 3, obtaining avg_3d_real_hand.
-    <br>4.1) Note: we don’t consider the real point clouds that are further away than 1.6m (distance to the end of the experiments table in this case)
-6) Compute the ratio of both averages: depth_ratio = avg_3d_real_hand / avg_3d_wilor_hand.
-7) Scale the 3D wilor hand points using the depth_ratio
-    <br>6.1) Save their depths into an array old_depths
-    <br>6.2) Project the 3D wilor hand points onto the image
-    <br>6.3) Turn those projected points back to 3D considering their new depths = old_depths * depth_ratio, and considering the real camera intrinsics.
+- **Inputs**:  
+  A single RGB image $I_\text{RGB}$, depth image $ I_\text{D}$, Camera Intrinsics $ K_{real}$ (either from the color camera or the depth camera, depending on whether we have aligned depth to color or color to depth respectively), the WiLoR predicted hand model $ H_{pred}$, and the predicted WiLoR Camera Intrinsics $ K_{wilor}$. 
+  
+  The latter is key, as it allows projecting the WiLoR vertices $ V_{wilor}$ onto the image, making the 2D WiLoR points and the 2D real points share the same space.
+
+- **Output**: Predicted WiLoR hand vertices aligned with the real hand points.
+
+- **Steps**:
+
+  1. **Find which pixels in $ I_{RGB}$ correspond to the WiLoR hand**:  
+     Render the WiLoR hand and project it onto the image using $ K_{wilor}$, obtaining 2D projected vertices $ PV_{wilor}$. This produces a 2D mask $ mask_{wilor}$ identifying where the projected WiLoR hand appears in the image.
+
+  2. **Find which pixels in $ I_{RGB}$ correspond to the real hand**:  
+     Use GSAM on $ I_\text{RGB}$ with the prompt *"hand."* to obtain a 2D mask $ mask_\text{real}$ identifying potential hand regions.  
+     This step is crucial because $ mask_\text{wilor}$ may incorrectly include pixels corresponding to objects the hand is grasping or background elements, leading to erroneous depth values if used directly.  
+
+     Since GSAM can produce multiple masks, select the one closest to $ mask_\text{wilor}$ using their centroids. This approach supports scenarios with multiple WiLoR hands in the image by independently selecting the closest GSAM mask for each hand.  
+
+     Finally, apply a depth-based filtering step to reduce noise:  
+     - Ignore pixels within $ mask_\text{real}$ that have no depth data.  
+     - Discard pixels with depth values exceeding a defined threshold.
+
+  3. **Find the common region of pixels between the WiLoR hand and the real hand**:  
+     Intersect $ mask_{wilor}$ and $ mask_{real}$ to obtain $ mask_{final}$.
+
+  4. **Find the depths of the WiLoR hand points in this common region**:  
+     Render the WiLoR hand and use ray casting to compute the depths of only those points visible from the camera’s perspective, ignoring occluded or hidden areas.  
+     Consider only the depths within $ mask_{final}$, obtaining $ regional\_depths_{wilor}$.
+
+  5. **Find the depths of the real hand points in the common region**:  
+     Simply filter $ I_D$ using $ mask_{final}$, obtaining $ regional\_depths_{real}$.
+
+  6. **Take the ratio of both depths**:  
+     For every corresponding WiLoR and real depth match $ i$, compute:  
+     $ratios_i = \frac{regional\_depths_{real, i}}{regional\_depths_{wilor, i}}$
+
+  7. **Take the average of the ratios**:  
+     Compute the final scaling ratio as
+     $final\_ratio = \text{avg}(ratios)$
+     This gives the value to scale the WiLoR hand depths.
+
+  8. **Scale WiLoR hand points**:  
+     - Extract the depths of all WiLoR vertices $ depths_{wilor}$.  
+     - Scale them:
+       $depths_{wilor} = depths_{wilor} \cdot final\_ratio$
+     - Reconstruct the 3D points using the new depths and $ K_{real} $, obtaining $ V_{wilor, aligned} $.  
+
+     > **Note**:  
+     We use $ K_{real} $ instead of $ K_{wilor} $ to ensure that $ V_{wilor, aligned} $ is expressed in the same coordinate space as the real hand and the rest of the scene.  
+     This step not only rescales the depth ($ z $-coordinate) but also correctly maps the $ x $ and $ y $ coordinates, ensuring full spatial alignment.
+
+  9. **Recreate the hand mesh**:  
+     Using the aligned 3D vertices $ V_{wilor, aligned} $, reconstruct the final hand mesh $H_{aligned}$.
 
 
 ### Before:
@@ -32,13 +70,12 @@ Pseudocode: <br>
 ### After:
 <img src="https://github.com/user-attachments/assets/4a54cdb3-648e-4a45-9d4d-afb4a2cc14ae" width="300">
 
-### 2D projection for reference:
+### 2D Projection for Reference:
 <img src="https://github.com/user-attachments/assets/46bf054b-a092-4b77-8b1a-b2a519e7f9f3" width="300">
 
 
 ## Further improvements using GSAM2 segmentation
-In step 3.2), the WiLoR hand 2D projection might match pixels that do not match with the real hand but with an object (i.e. when the real hand is occluded by that object). That would mean in steps 3.2) and 4) we include the depths of the object rather than the ones from the real hand, making the scaling a bit inaccurate. We solve this issue using a hand segmentation from GSAM2.
-This improvement is set by default.
+GSAM2 segmentation is set by default.
 <br>
 Here's an example taken from the file "demo_rgbk/mug_lots_of_occlusion.npy":
 ### Before
@@ -96,7 +133,7 @@ python demo_rgbdk.py --npy_folder demo_rgbdk --out_folder demo_out --save_mesh -
 ## Visualizations
 Python scripts have been added to the folder [utils](https://github.com/jacintosuner/WiLoR/tree/main/utils) to:
 - capture an rbgdk frame (rgb + depth + camera intrinsics): [capture_rgbdk.py](https://github.com/jacintosuner/WiLoR/blob/main/utils/capture_rgbdk.py)
-- visualize an rgbdk frame together with / or an obj file together with / or a pcd file (npy file with point cloud info): [visualize_rgbdk_or_obj_or_pcd.py ](https://github.com/jacintosuner/WiLoR/blob/main/utils/visualize_rgbdk_or_obj_or_pcd.py)
+- visualize an rgbdk frame together with / or an obj file together with / or a pcd file (npy file with point cloud info): [visualize_3d_rgbdk_or_obj_or_pcd.py ](https://github.com/jacintosuner/WiLoR/blob/main/utils/visualize_3d_rgbdk_or_obj_or_pcd.py)
 - visualize a hand obj file and select the keypoints: [hand_viewer_picker.py](https://github.com/jacintosuner/WiLoR/blob/main/utils/hand_viewer_picker.py)
 
 ## Further comments:
